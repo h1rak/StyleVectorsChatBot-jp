@@ -32,8 +32,35 @@ def wrime_get_single_emo(df, max_only=True, threshold=2):
                 selected.append({"text": row["Sentence"], "labels": [max_idx], "id": idx, "emo": emotion_names[max_idx],"Train/Dev/Test":row["Train/Dev/Test"]})
     return pd.DataFrame(selected)
 
+def wrime_get_weighted_emo(df, threshold=1):
+    emotion_names = ['Joy', 'Sadness', 'Anticipation', 'Surprise', 'Anger', 'Fear', 'Disgust', 'Trust']
+    selected = []
+    for idx, row in df.iterrows():
+        scores = [row['Avg. Readers_' + name] for name in emotion_names]
+        
+        # スコアが0の感情は除外
+        if all(score == 0 for score in scores):
+            continue
+        
+        # 閾値以上のスコアがある感情を全て選択
+        weighted_labels = {}
+        for i, score in enumerate(scores):
+            if score >= threshold:  # 閾値以上のスコアだけ考慮
+                weighted_labels[emotion_names[i]] = score
+                #weighted_labels.append((emotion_names[i], score))  # 感情名とスコアのペアとして保存
 
-df = wrime_get_single_emo(df)
+        if weighted_labels:
+            selected.append({
+                "text": row["Sentence"],
+                "labels": weighted_labels,  # スコアと感情のペアをラベルとして保存
+                "id": idx,
+                "Train/Dev/Test": row["Train/Dev/Test"]
+            })
+    return pd.DataFrame(selected)
+
+
+df = wrime_get_weighted_emo(df)
+print(df)
 load_dotenv()
 
 MODEL_PATH = os.getenv("MODEL_WEIGHTS_FOLDER")
@@ -84,18 +111,9 @@ def process_dataset(df):
             actis_test.append([index,row,hidden_states])
 
         i += 1
-        # save activations in batches
-        if i == 6000:
-            i = 0
-            with open(f'{PATH_TO_ACTIVATION_STORAGE}/activations_{j}.pkl', 'wb') as f:
-                pickle.dump(actis, f)
-            del actis
-            del hidden_states
-            actis = []
-            j += 1
-    with open(f'{PATH_TO_ACTIVATION_STORAGE}/activations_train.pkl', 'wb') as f:
+    with open(f'{PATH_TO_ACTIVATION_STORAGE}/wieghted_activations_train.pkl', 'wb') as f:
         pickle.dump(actis_train, f)
-    with open(f'{PATH_TO_ACTIVATION_STORAGE}/activations_test.pkl', 'wb') as f:
+    with open(f'{PATH_TO_ACTIVATION_STORAGE}/wieghted_activations_test.pkl', 'wb') as f:
         pickle.dump(actis_test, f)
 
     del actis
